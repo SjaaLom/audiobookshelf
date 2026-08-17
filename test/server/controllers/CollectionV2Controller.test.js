@@ -16,12 +16,31 @@ describe('GET /api/v2/libraries/:id/collections', () => {
 
   beforeEach(async () => {
     global.ServerSettings = {}
-    Database.sequelize = new Sequelize({ dialect: 'sqlite', storage: ':memory:', logging: false })
+    Database.sequelize = new Sequelize({
+      dialect: 'sqlite',
+      storage: ':memory:',
+      logging: false
+    })
     Database.sequelize.uppercaseFirst = (str) => (str ? `${str[0].toUpperCase()}${str.substr(1)}` : '')
     await Database.buildModels()
-    library = await Database.libraryModel.create({ id: 'library-a', name: 'Books', mediaType: 'book' })
-    folder = await Database.libraryFolderModel.create({ path: '/books', libraryId: library.id })
-    user = { canAccessExplicitContent: true, permissions: { accessAllTags: true }, checkCanAccessLibrary: (id) => id === library.id, username: 'reader' }
+
+    library = await Database.libraryModel.create({
+      id: 'library-a',
+      name: 'Books',
+      mediaType: 'book'
+    })
+    folder = await Database.libraryFolderModel.create({
+      path: '/books',
+      libraryId: library.id
+    })
+    user = {
+      canAccessExplicitContent: true,
+      permissions: {
+        accessAllTags: true
+      },
+      checkCanAccessLibrary: (id) => id === library.id,
+      username: 'reader'
+    }
   })
 
   afterEach(async () => {
@@ -30,25 +49,65 @@ describe('GET /api/v2/libraries/:id/collections', () => {
   })
 
   async function addBook(id, { explicit = false, tags = [], coverPath = `${id}.jpg` } = {}) {
-    const book = await Database.bookModel.create({ id: `book-${id}`, title: id, explicit, tags, coverPath, audioFiles: [], narrators: [], genres: [], chapters: [] })
-    const item = await Database.libraryItemModel.create({ id: `item-${id}`, path: `/books/${id}`, libraryFiles: [], mediaId: book.id, mediaType: 'book', libraryId: library.id, libraryFolderId: folder.id })
+    const book = await Database.bookModel.create({
+      id: `book-${id}`,
+      title: id,
+      explicit,
+      tags,
+      coverPath,
+      audioFiles: [],
+      narrators: [],
+      genres: [],
+      chapters: []
+    })
+    const item = await Database.libraryItemModel.create({
+      id: `item-${id}`,
+      path: `/books/${id}`,
+      libraryFiles: [],
+      mediaId: book.id,
+      mediaType: 'book',
+      libraryId: library.id,
+      libraryFolderId: folder.id
+    })
     return { book, item }
   }
 
   async function addCollection(id, name, books) {
-    const collection = await Database.collectionModel.create({ id, libraryId: library.id, name, description: `${name} description` })
-    for (let order = 0; order < books.length; order++) await Database.collectionBookModel.create({ collectionId: collection.id, bookId: books[order].book.id, order })
+    const collection = await Database.collectionModel.create({
+      id,
+      libraryId: library.id,
+      name,
+      description: `${name} description`
+    })
+    for (let order = 0; order < books.length; order++) {
+      await Database.collectionBookModel.create({
+        collectionId: collection.id,
+        bookId: books[order].book.id,
+        order
+      })
+    }
     return collection
   }
 
   function response() {
-    return { status: sinon.stub().returnsThis(), json: sinon.spy(), send: sinon.spy(), sendStatus: sinon.spy() }
+    return {
+      status: sinon.stub().returnsThis(),
+      json: sinon.spy(),
+      send: sinon.spy(),
+      sendStatus: sinon.spy()
+    }
   }
 
   async function request(query = {}) {
-    const req = { query, params: { id: library.id }, user, library, collectionSummaryQuery: undefined }
+    const req = {
+      query,
+      params: { id: library.id },
+      user,
+      library,
+      collectionSummaryQuery: undefined
+    }
     const res = response()
-    CollectionV2Controller.parseQuery(req, res, () => {})
+    CollectionV2Controller.validateQuery(req, res, () => {})
     if (!res.status.called) await CollectionV2Controller.findAll(req, res)
     return { req, res, body: res.json.lastCall?.args[0] }
   }
@@ -74,14 +133,57 @@ describe('GET /api/v2/libraries/:id/collections', () => {
     expect((await request({ filter: '100% pICK' })).body.results.map((c) => c.id)).to.deep.equal(['c-1'])
   })
 
-  it('rejects malformed and unsupported query values with one 400 shape', () => {
-    for (const query of [{ page: '1x' }, { page: '-1' }, { page: ['1'] }, { page: '9007199254740992' }, { limit: '0' }, { limit: '101' }, { desc: 'true' }, { sort: 'books' }, { include: 'books' }]) {
+  it('rejects invalid pagination query values', () => {
+    const invalidQueries = [
+      { page: '1x' },
+      { page: '-1' },
+      { page: ['1'] },
+      { page: '9007199254740992' },
+      { limit: '0' },
+      { limit: '101' }
+    ]
+
+    for (const query of invalidQueries) {
       const req = { query }
       const res = response()
-      CollectionV2Controller.parseQuery(req, res, sinon.spy())
+
+      CollectionV2Controller.validateQuery(req, res, sinon.spy())
+
       expect(res.status.calledWith(400), JSON.stringify(query)).to.equal(true)
-      expect(res.json.calledWith({ error: 'Invalid collection summary query parameters' })).to.equal(true)
+      expect(res.send.calledWithMatch(/^Invalid request\./)).to.equal(true)
     }
+  })
+
+  it('rejects invalid sort, direction, and filter query values', () => {
+    const invalidQueries = [{ desc: 'true' }, { sort: 'books' }, { filter: ['name'] }]
+
+    for (const query of invalidQueries) {
+      const req = { query }
+      const res = response()
+
+      CollectionV2Controller.validateQuery(req, res, sinon.spy())
+
+      expect(res.status.calledWith(400), JSON.stringify(query)).to.equal(true)
+      expect(res.send.calledWithMatch(/^Invalid request\./)).to.equal(true)
+    }
+  })
+
+  it('ignores unrelated query parameters', () => {
+    const req = { query: { include: 'books' } }
+    const res = response()
+    const next = sinon.spy()
+
+    CollectionV2Controller.validateQuery(req, res, next)
+
+    expect(res.status.called).to.equal(false)
+    expect(next.calledOnce).to.equal(true)
+    expect(req.collectionSummaryQuery).to.deep.equal({
+      page: 0,
+      limit: 20,
+      sort: 'name',
+      desc: false,
+      filter: ''
+    })
   })
 
   it('uses the same explicit and tag visibility for existence, counts, and previews', async () => {
@@ -128,9 +230,10 @@ describe('GET /api/v2/libraries/:id/collections', () => {
     const { body } = await request({ limit: '100' })
 
     expect(body.results).to.have.length(3)
-    expect(querySpy.getCalls().filter((call) => call.args[0].includes('WITH rankedPreviews AS'))).to.have.length(1)
+    const previewQueries = () => querySpy.getCalls().filter((call) => call.args[0].includes('WITH rankedPreviews AS'))
+    expect(previewQueries()).to.have.length(1)
     expect((await request({ limit: '100', page: '1' })).body.results).to.be.empty
-    expect(querySpy.getCalls().filter((call) => call.args[0].includes('WITH rankedPreviews AS'))).to.have.length(1)
+    expect(previewQueries()).to.have.length(1)
   })
 
   it('preserves existing library access behavior and legacy route registration', async () => {
@@ -146,7 +249,9 @@ describe('GET /api/v2/libraries/:id/collections', () => {
     expect(missingRes.send.calledWith('Library not found')).to.equal(true)
 
     const router = new ApiRouter({ auth: new Auth(), apiCacheManager: new ApiCacheManager() })
-    const routes = router.router._router.stack.filter((layer) => layer.route).map((layer) => layer.route.path)
+    const routes = router.router._router.stack
+      .filter((layer) => layer.route)
+      .map((layer) => layer.route.path)
     expect(routes).to.include('/v2/libraries/:id/collections')
     expect(routes).to.include('/libraries/:id/collections')
     expect(routes).to.include('/collections/:id')
