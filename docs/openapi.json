@@ -1176,7 +1176,7 @@
           "required": true,
           "description": "The ID of the library.",
           "schema": {
-            "type": "string"
+            "$ref": "#/components/schemas/libraryId"
           }
         }
       ],
@@ -3325,52 +3325,28 @@
           }
         ]
       },
-      "collectionPreviewItem": {
-        "type": "object",
-        "required": [
-          "id",
-          "media"
-        ],
-        "properties": {
-          "id": {
-            "type": "string",
-            "description": "The ID of the library item."
-          },
-          "media": {
-            "type": "object",
-            "required": [
-              "coverPath"
-            ],
-            "properties": {
-              "coverPath": {
-                "type": "string",
-                "nullable": true,
-                "description": "The stored cover image path for the book."
-              }
-            }
-          }
-        }
+      "collectionId": {
+        "type": "string",
+        "description": "The ID of the collection.",
+        "format": "uuid"
       },
-      "collectionSummary": {
+      "collection": {
         "type": "object",
+        "description": "Base collection schema.",
         "required": [
           "id",
           "libraryId",
           "name",
           "description",
-          "numBooks",
-          "previewItems",
           "createdAt",
           "updatedAt"
         ],
         "properties": {
           "id": {
-            "type": "string",
-            "description": "The ID of the collection."
+            "$ref": "#/components/schemas/collectionId"
           },
           "libraryId": {
-            "type": "string",
-            "description": "The ID of the library containing the collection."
+            "$ref": "#/components/schemas/libraryId"
           },
           "name": {
             "type": "string",
@@ -3381,30 +3357,66 @@
             "nullable": true,
             "description": "The description of the collection."
           },
-          "numBooks": {
-            "type": "integer",
-            "minimum": 1,
-            "description": "The number of books in the collection that are visible to the requesting user."
-          },
-          "previewItems": {
-            "type": "array",
-            "maxItems": 2,
-            "description": "Up to two visible library items, in collection order, for displaying cover previews.",
-            "items": {
-              "$ref": "#/components/schemas/collectionPreviewItem"
-            }
-          },
           "createdAt": {
-            "type": "integer",
-            "format": "int64",
-            "description": "The time in milliseconds since the POSIX epoch when the collection was created."
+            "$ref": "#/components/schemas/createdAt"
           },
           "updatedAt": {
-            "type": "integer",
-            "format": "int64",
-            "description": "The time in milliseconds since the POSIX epoch when the collection was last updated."
+            "$ref": "#/components/schemas/updatedAt"
           }
         }
+      },
+      "collectionPreviewItem": {
+        "type": "object",
+        "required": [
+          "id",
+          "media"
+        ],
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/libraryItemId"
+          },
+          "media": {
+            "type": "object",
+            "required": [
+              "coverPath"
+            ],
+            "properties": {
+              "coverPath": {
+                "$ref": "#/components/schemas/bookCoverPath"
+              }
+            }
+          }
+        }
+      },
+      "collectionSummary": {
+        "description": "A compact collection representation with a visible book count and cover previews.",
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/collection"
+          },
+          {
+            "type": "object",
+            "required": [
+              "numBooks",
+              "previewItems"
+            ],
+            "properties": {
+              "numBooks": {
+                "type": "integer",
+                "minimum": 1,
+                "description": "The number of books in the collection that are visible to the requesting user."
+              },
+              "previewItems": {
+                "type": "array",
+                "maxItems": 2,
+                "description": "Up to two visible library items, in collection order, for displaying cover previews.",
+                "items": {
+                  "$ref": "#/components/schemas/collectionPreviewItem"
+                }
+              }
+            }
+          }
+        ]
       },
       "NotificationEvent": {
         "type": "object",
