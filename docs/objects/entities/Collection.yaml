@@ -45,11 +45,11 @@ components:
           properties:
             numBooks:
               type: integer
-              minimum: 1
-              description: The number of books in the collection that are visible to the requesting user.
+              minimum: 0
+              description: The number of books in the collection that are visible to the requesting user. This is zero for a persisted collection with no book memberships.
             previewItems:
               type: array
               maxItems: 2
-              description: Up to two visible library items, in collection order, for displaying cover previews.
+              description: Up to two visible library items, in collection order, for displaying cover previews. This is empty for a persisted collection with no book memberships.
               items:
                 $ref: '#/components/schemas/collectionPreviewItem'

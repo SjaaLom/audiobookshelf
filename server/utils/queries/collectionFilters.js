@@ -61,13 +61,16 @@ module.exports = {
       FROM collectionBooks cb
       JOIN books b ON b.id = cb.bookId
       WHERE cb.collectionId = c.id AND ${visibleBook.sql}`
+    const collectionVisibilitySql = `
+      (NOT EXISTS (SELECT 1 FROM collectionBooks cb WHERE cb.collectionId = c.id)
+       OR EXISTS (SELECT 1 ${visibleMembershipSql}))`
 
     const results = await Database.sequelize.query(
       `SELECT c.id, c.libraryId, c.name, c.description, c.createdAt, c.updatedAt,
               (SELECT COUNT(*) ${visibleMembershipSql}) AS numBooks
          FROM collections c
         WHERE c.libraryId = :libraryId ${filterSql}
-          AND EXISTS (SELECT 1 ${visibleMembershipSql})
+          AND ${collectionVisibilitySql}
         ORDER BY ${sortExpression} ${direction}, c.id ${direction}
         LIMIT :limit OFFSET :offset`,
       {
@@ -79,7 +82,7 @@ module.exports = {
     const [{ total }] = await Database.sequelize.query(
       `SELECT COUNT(*) AS total FROM collections c
         WHERE c.libraryId = :libraryId ${filterSql}
-          AND EXISTS (SELECT 1 ${visibleMembershipSql})`,
+          AND ${collectionVisibilitySql}`,
       {
         replacements,
         type: QueryTypes.SELECT

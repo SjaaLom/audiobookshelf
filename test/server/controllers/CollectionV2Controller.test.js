@@ -212,6 +212,19 @@ describe('GET /api/v2/libraries/:id/collections', () => {
     ])
   })
 
+  it('returns a persisted collection with no book memberships as an empty summary', async () => {
+    const book = await addBook('removed')
+    const collection = await addCollection('empty', 'Empty', [book])
+    await Database.collectionBookModel.destroy({ where: { collectionId: collection.id } })
+
+    const { body } = await request()
+
+    expect(body.total).to.equal(1)
+    expect(body.results).to.have.length(1)
+    expect(body.results[0]).to.include({ id: collection.id, numBooks: 0 })
+    expect(body.results[0].previewItems).to.deep.equal([])
+  })
+
   it('returns only compact summaries and at most two compact previews', async () => {
     const books = [await addBook('a'), await addBook('b'), await addBook('c')]
     const collection = await addCollection('compact', 'Compact', books)

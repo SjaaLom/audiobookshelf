@@ -10,7 +10,7 @@ paths:
     get:
       operationId: getLibraryCollectionSummaries
       summary: Get collection summaries in a library
-      description: Returns paginated compact summaries for collections containing at least one book visible to the requesting user. Book counts and preview items also respect the user's explicit-content and tag permissions.
+      description: Returns paginated compact summaries for persisted collections with no book memberships and for collections containing at least one book visible to the requesting user. Persisted empty collections have a book count of zero and no preview items. Non-empty collections whose books are all inaccessible remain hidden, and book counts and preview items respect the user's explicit-content and tag permissions.
       tags:
         - Collections
       parameters:
@@ -66,7 +66,7 @@ paths:
                   total:
                     type: integer
                     minimum: 0
-                    description: Total number of matching, visible collections before pagination.
+                    description: Total number of matching collections before pagination, including persisted empty collections and excluding non-empty collections with no visible books.
                   limit:
                     type: integer
                     minimum: 1

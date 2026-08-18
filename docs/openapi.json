@@ -1183,7 +1183,7 @@
       "get": {
         "operationId": "getLibraryCollectionSummaries",
         "summary": "Get collection summaries in a library",
-        "description": "Returns paginated compact summaries for collections containing at least one book visible to the requesting user. Book counts and preview items also respect the user's explicit-content and tag permissions.",
+        "description": "Returns paginated compact summaries for persisted collections with no book memberships and for collections containing at least one book visible to the requesting user. Persisted empty collections have a book count of zero and no preview items. Non-empty collections whose books are all inaccessible remain hidden, and book counts and preview items respect the user's explicit-content and tag permissions.",
         "tags": [
           "Collections"
         ],
@@ -1273,7 +1273,7 @@
                     "total": {
                       "type": "integer",
                       "minimum": 0,
-                      "description": "Total number of matching, visible collections before pagination."
+                      "description": "Total number of matching collections before pagination, including persisted empty collections and excluding non-empty collections with no visible books."
                     },
                     "limit": {
                       "type": "integer",
@@ -3403,13 +3403,13 @@
             "properties": {
               "numBooks": {
                 "type": "integer",
-                "minimum": 1,
-                "description": "The number of books in the collection that are visible to the requesting user."
+                "minimum": 0,
+                "description": "The number of books in the collection that are visible to the requesting user. This is zero for a persisted collection with no book memberships."
               },
               "previewItems": {
                 "type": "array",
                 "maxItems": 2,
-                "description": "Up to two visible library items, in collection order, for displaying cover previews.",
+                "description": "Up to two visible library items, in collection order, for displaying cover previews. This is empty for a persisted collection with no book memberships.",
                 "items": {
                   "$ref": "#/components/schemas/collectionPreviewItem"
                 }
