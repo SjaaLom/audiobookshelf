@@ -33,6 +33,18 @@ class CollectionV2Controller {
   constructor() {}
 
   /**
+   * Preserve raw v2 values before the shared library middleware normalizes pagination.
+   *
+   * @param {Request} req
+   * @param {Response} res
+   * @param {NextFunction} next
+   */
+  captureQuery(req, res, next) {
+    req.collectionSummaryRawQuery = { ...req.query }
+    next()
+  }
+
+  /**
    * Validate and normalize collection query parameters
    *
    * @param {Request} req
@@ -40,26 +52,27 @@ class CollectionV2Controller {
    * @param {NextFunction} next
    */
   validateQuery(req, res, next) {
+    const query = req.collectionSummaryRawQuery || req.query
     const integerPattern = /^(0|[1-9]\d*)$/
 
-    if (req.query.page !== undefined && (typeof req.query.page !== 'string' || !integerPattern.test(req.query.page))) {
+    if (query.page !== undefined && (typeof query.page !== 'string' || !integerPattern.test(query.page))) {
       return res.status(400).send('Invalid request. Page must be a non-negative integer')
     }
-    if (req.query.limit !== undefined && (typeof req.query.limit !== 'string' || !integerPattern.test(req.query.limit))) {
+    if (query.limit !== undefined && (typeof query.limit !== 'string' || !integerPattern.test(query.limit))) {
       return res.status(400).send('Invalid request. Limit must be an integer between 1 and 100')
     }
-    if (req.query.sort !== undefined && (typeof req.query.sort !== 'string' || !['name', 'createdAt', 'updatedAt'].includes(req.query.sort))) {
+    if (query.sort !== undefined && (typeof query.sort !== 'string' || !['name', 'createdAt', 'updatedAt'].includes(query.sort))) {
       return res.status(400).send('Invalid request. Sort must be name, createdAt, or updatedAt')
     }
-    if (req.query.desc !== undefined && (typeof req.query.desc !== 'string' || !['0', '1'].includes(req.query.desc))) {
+    if (query.desc !== undefined && (typeof query.desc !== 'string' || !['0', '1'].includes(query.desc))) {
       return res.status(400).send('Invalid request. Desc must be 0 or 1')
     }
-    if (req.query.filter !== undefined && typeof req.query.filter !== 'string') {
+    if (query.filter !== undefined && typeof query.filter !== 'string') {
       return res.status(400).send('Invalid request. Filter must be a string')
     }
 
-    const page = req.query.page === undefined ? defaultQuery.page : Number(req.query.page)
-    const limit = req.query.limit === undefined ? defaultQuery.limit : Number(req.query.limit)
+    const page = query.page === undefined ? defaultQuery.page : Number(query.page)
+    const limit = query.limit === undefined ? defaultQuery.limit : Number(query.limit)
 
     if (!Number.isSafeInteger(page)) {
       return res.status(400).send('Invalid request. Page must be a non-negative integer')
@@ -74,9 +87,9 @@ class CollectionV2Controller {
     req.collectionSummaryQuery = {
       page,
       limit,
-      sort: req.query.sort || defaultQuery.sort,
-      desc: req.query.desc === '1',
-      filter: req.query.filter || defaultQuery.filter
+      sort: query.sort || defaultQuery.sort,
+      desc: query.desc === '1',
+      filter: query.filter || defaultQuery.filter
     }
     next()
   }

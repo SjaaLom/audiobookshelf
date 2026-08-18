@@ -8,6 +8,7 @@ const CollectionV2Controller = require('../../../server/controllers/CollectionV2
 const LibraryController = require('../../../server/controllers/LibraryController')
 const ApiCacheManager = require('../../../server/managers/ApiCacheManager')
 const Auth = require('../../../server/Auth')
+const collectionFilters = require('../../../server/utils/queries/collectionFilters')
 
 describe('GET /api/v2/libraries/:id/collections', () => {
   let library
@@ -236,6 +237,62 @@ describe('GET /api/v2/libraries/:id/collections', () => {
     expect(previewQueries()).to.have.length(1)
   })
 
+  it('scopes preview library items to the requested library', async () => {
+    const visible = await addBook('shared')
+    await addCollection('shared-collection', 'Shared', [visible])
+    const otherLibrary = await Database.libraryModel.create({ id: 'library-b', name: 'Other', mediaType: 'book' })
+    const otherFolder = await Database.libraryFolderModel.create({ path: '/other-books', libraryId: otherLibrary.id })
+    await Database.libraryItemModel.create({
+      id: 'item-shared-other-library',
+      path: '/other-books/shared',
+      libraryFiles: [],
+      mediaId: visible.book.id,
+      mediaType: 'book',
+      libraryId: otherLibrary.id,
+      libraryFolderId: otherFolder.id
+    })
+
+    expect((await request()).body.results[0].previewItems).to.deep.equal([{ id: 'item-shared', media: { coverPath: 'shared.jpg' } }])
+  })
+
+  it('rejects unsupported helper sorts before executing a query', async () => {
+    const queryStub = sinon.stub(Database.sequelize, 'query')
+
+    for (const sort of ['name; DROP TABLE collections', 'toString']) {
+      let error
+      try {
+        await collectionFilters.getCollectionSummaries({ libraryId: library.id, user, page: 0, limit: 20, sort, desc: false, filter: '' })
+      } catch (caught) {
+        error = caught
+      }
+
+      expect(error).to.be.an('error').with.property('message').that.includes('Unsupported collection summary sort')
+    }
+    expect(queryStub.called).to.equal(false)
+  })
+
+  it('checks library access and existence before validating the captured raw v2 query', async () => {
+    async function runUntilResponse(req) {
+      const res = response()
+      CollectionV2Controller.captureQuery(req, res, () => {})
+      await LibraryController.middleware(req, res, () => CollectionV2Controller.validateQuery(req, res, () => {}))
+      return res
+    }
+
+    const deniedRes = await runUntilResponse({ params: { id: 'other-library' }, query: { limit: 'invalid' }, user })
+    expect(deniedRes.sendStatus.calledWith(403)).to.equal(true)
+    expect(deniedRes.status.calledWith(400)).to.equal(false)
+
+    const missingRes = await runUntilResponse({ params: { id: 'missing' }, query: { page: 'invalid' }, user: { ...user, checkCanAccessLibrary: () => true } })
+    expect(missingRes.status.calledWith(404)).to.equal(true)
+    expect(missingRes.status.calledWith(400)).to.equal(false)
+
+    const malformedReq = { params: { id: library.id }, query: { page: '01', limit: '1e2' }, user }
+    const malformedRes = await runUntilResponse(malformedReq)
+    expect(malformedReq.query).to.deep.equal({ page: 1, limit: 100 })
+    expect(malformedRes.status.calledWith(400)).to.equal(true)
+  })
+
   it('preserves existing library access behavior and legacy route registration', async () => {
     const deniedReq = { params: { id: 'other-library' }, query: {}, user }
     const deniedRes = response()
@@ -249,11 +306,12 @@ describe('GET /api/v2/libraries/:id/collections', () => {
     expect(missingRes.send.calledWith('Library not found')).to.equal(true)
 
     const router = new ApiRouter({ auth: new Auth(), apiCacheManager: new ApiCacheManager() })
-    const routes = router.router._router.stack
-      .filter((layer) => layer.route)
-      .map((layer) => layer.route.path)
+    const routeLayers = router.router._router.stack.filter((layer) => layer.route)
+    const routes = routeLayers.map((layer) => layer.route.path)
     expect(routes).to.include('/v2/libraries/:id/collections')
     expect(routes).to.include('/libraries/:id/collections')
     expect(routes).to.include('/collections/:id')
+    const v2Route = routeLayers.find((layer) => layer.route.path === '/v2/libraries/:id/collections')
+    expect(v2Route.route.stack.map((layer) => layer.name)).to.deep.equal(['bound captureQuery', 'bound middleware', 'bound validateQuery', 'bound findAll'])
   })
 })

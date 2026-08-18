@@ -3,6 +3,12 @@ const { QueryTypes } = require('sequelize')
 const Database = require('../../Database')
 const libraryItemsBookFilters = require('./libraryItemsBookFilters')
 
+const collectionSortExpressions = new Map([
+  ['name', 'c.name COLLATE NOCASE'],
+  ['createdAt', 'c.createdAt'],
+  ['updatedAt', 'c.updatedAt']
+])
+
 function escapeLike(value) {
   return value.replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_')
 }
@@ -40,7 +46,8 @@ module.exports = {
    */
   async getCollectionSummaries({ libraryId, user, page, limit, sort, desc, filter }) {
     const direction = desc ? 'DESC' : 'ASC'
-    const sortExpression = sort === 'name' ? 'c.name COLLATE NOCASE' : `c.${sort}`
+    const sortExpression = collectionSortExpressions.get(sort)
+    if (!sortExpression) throw new Error(`[collectionFilters] Unsupported collection summary sort: ${sort}`)
     const visibleBook = getVisibleBookSql(user)
     const filterSql = filter ? "AND c.name LIKE :filter ESCAPE '\\'" : ''
     const replacements = {
@@ -87,7 +94,7 @@ module.exports = {
                     ROW_NUMBER() OVER (PARTITION BY cb.collectionId ORDER BY cb."order" ASC, cb.bookId ASC) AS previewRank
                FROM collectionBooks cb
                JOIN books b ON b.id = cb.bookId
-               JOIN libraryItems li ON li.mediaId = b.id AND li.mediaType = 'book'
+               JOIN libraryItems li ON li.libraryId = :libraryId AND li.mediaId = b.id AND li.mediaType = 'book'
               WHERE cb.collectionId IN (:collectionIds) AND ${visibleBook.sql}
            )
            SELECT collectionId, id, coverPath
@@ -97,6 +104,7 @@ module.exports = {
           {
             replacements: {
               ...visibleBook.replacements,
+              libraryId,
               collectionIds: results.map((collection) => collection.id)
             },
             type: QueryTypes.SELECT

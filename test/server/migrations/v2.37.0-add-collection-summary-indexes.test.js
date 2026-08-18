@@ -7,6 +7,17 @@ const Logger = require('../../../server/Logger')
 const MigrationManager = require('../../../server/managers/MigrationManager')
 const { up, down } = require('../../../server/migrations/v2.37.0-add-collection-summary-indexes')
 
+function normalizeIndexSql(sql) {
+  return sql.replace(/[`"\[\]]/g, '').replace(/\s+/g, ' ').trim()
+}
+
+function expectSummaryIndexDefinitions(definitions) {
+  expect(definitions.map(({ name }) => name)).to.deep.equal(['collection_books_collection_id_order_book_id', 'collections_library_id_name_nocase_id'])
+  const sqlByName = Object.fromEntries(definitions.map(({ name, sql }) => [name, normalizeIndexSql(sql)]))
+  expect(sqlByName.collection_books_collection_id_order_book_id).to.match(/^CREATE INDEX collection_books_collection_id_order_book_id ON collectionBooks \(collectionId, order, bookId\)$/i)
+  expect(sqlByName.collections_library_id_name_nocase_id).to.match(/^CREATE INDEX collections_library_id_name_nocase_id ON collections \(libraryId, name COLLATE NOCASE, id\)$/i)
+}
+
 describe('Migration v2.37.0-add-collection-summary-indexes', () => {
   let sequelize
   let queryInterface
@@ -55,16 +66,7 @@ describe('Migration v2.37.0-add-collection-summary-indexes', () => {
     const [definitions] = await sequelize.query(
       "SELECT name, sql FROM sqlite_master WHERE type = 'index' AND name IN ('collections_library_id_name_nocase_id', 'collection_books_collection_id_order_book_id') ORDER BY name"
     )
-    expect(definitions).to.deep.equal([
-      {
-        name: 'collection_books_collection_id_order_book_id',
-        sql: 'CREATE INDEX collection_books_collection_id_order_book_id ON collectionBooks (collectionId, `order`, bookId)'
-      },
-      {
-        name: 'collections_library_id_name_nocase_id',
-        sql: 'CREATE INDEX collections_library_id_name_nocase_id ON collections (libraryId, name COLLATE NOCASE, id)'
-      }
-    ])
+    expectSummaryIndexDefinitions(definitions)
 
     await down({ context: { queryInterface, logger: Logger } })
     await down({ context: { queryInterface, logger: Logger } })
@@ -102,16 +104,7 @@ describe('Migration v2.37.0-add-collection-summary-indexes', () => {
     const [definitions] = await sequelize.query(
       "SELECT name, sql FROM sqlite_master WHERE type = 'index' AND name IN ('collections_library_id_name_nocase_id', 'collection_books_collection_id_order_book_id') ORDER BY name"
     )
-    expect(definitions).to.deep.equal([
-      {
-        name: 'collection_books_collection_id_order_book_id',
-        sql: 'CREATE INDEX `collection_books_collection_id_order_book_id` ON `collectionBooks` (`collectionId`, `order`, `bookId`)'
-      },
-      {
-        name: 'collections_library_id_name_nocase_id',
-        sql: 'CREATE INDEX `collections_library_id_name_nocase_id` ON `collections` (`libraryId`, `name` COLLATE `NOCASE`, `id`)'
-      }
-    ])
+    expectSummaryIndexDefinitions(definitions)
 
     const [collectionPlan] = await sequelize.query(
       "EXPLAIN QUERY PLAN SELECT c.id FROM collections c WHERE c.libraryId = 'library' ORDER BY c.name COLLATE NOCASE, c.id LIMIT 20"
@@ -119,8 +112,12 @@ describe('Migration v2.37.0-add-collection-summary-indexes', () => {
     const [membershipPlan] = await sequelize.query(
       "EXPLAIN QUERY PLAN SELECT cb.collectionId, cb.bookId FROM collectionBooks cb WHERE cb.collectionId IN ('collection-a', 'collection-b') ORDER BY cb.collectionId, cb.`order`, cb.bookId"
     )
+    const [previewJoinPlan] = await sequelize.query(
+      "EXPLAIN QUERY PLAN SELECT li.id FROM libraryItems li WHERE li.libraryId = 'library' AND li.mediaId = 'book' AND li.mediaType = 'book'"
+    )
     expect(collectionPlan.map((row) => row.detail).join('\n')).to.include('collections_library_id_name_nocase_id')
     expect(membershipPlan.map((row) => row.detail).join('\n')).to.include('collection_books_collection_id_order_book_id')
+    expect(previewJoinPlan.map((row) => row.detail).join('\n')).to.include('library_items_library_id_media_id_media_type')
 
     await up({ context: { queryInterface, logger: Logger } })
   })
