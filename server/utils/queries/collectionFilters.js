@@ -49,7 +49,7 @@ module.exports = {
     const sortExpression = collectionSortExpressions.get(sort)
     if (!sortExpression) throw new Error(`[collectionFilters] Unsupported collection summary sort: ${sort}`)
     const visibleBook = getVisibleBookSql(user)
-    const filterSql = filter ? "AND c.name LIKE :filter ESCAPE '\\'" : ''
+    const filterSql = filter ? "AND LOWER(c.name) LIKE LOWER(:filter) ESCAPE '\\'" : ''
     const replacements = {
       ...visibleBook.replacements,
       libraryId,

@@ -127,11 +127,16 @@ describe('GET /api/v2/libraries/:id/collections', () => {
   })
 
   it('filters names case-insensitively and treats wildcard characters literally', async () => {
+    await Database.sequelize.query('PRAGMA case_sensitive_like = ON')
     const visible = await addBook('visible')
     await addCollection('c-1', 'One 100% Pick', [visible])
     await addCollection('c-2', 'One 1000 Pick', [visible])
-    await addCollection('c-3', 'Other', [visible])
+    await addCollection('c-3', 'One_under Pick', [visible])
+    await addCollection('c-4', 'OneXunder Pick', [visible])
+    await addCollection('c-5', 'One\\path Pick', [visible])
     expect((await request({ filter: '100% pICK' })).body.results.map((c) => c.id)).to.deep.equal(['c-1'])
+    expect((await request({ filter: 'one_UNDER' })).body.results.map((c) => c.id)).to.deep.equal(['c-3'])
+    expect((await request({ filter: '\\PATH pick' })).body.results.map((c) => c.id)).to.deep.equal(['c-5'])
   })
 
   it('rejects invalid pagination query values', () => {
