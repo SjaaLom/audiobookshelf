@@ -3398,7 +3398,8 @@
             "type": "object",
             "required": [
               "numBooks",
-              "previewItems"
+              "previewItems",
+              "hasRssFeed"
             ],
             "properties": {
               "numBooks": {
@@ -3413,6 +3414,10 @@
                 "items": {
                   "$ref": "#/components/schemas/collectionPreviewItem"
                 }
+              },
+              "hasRssFeed": {
+                "type": "boolean",
+                "description": "Whether an RSS feed exists for the collection. Feed details are not embedded in this summary."
               }
             }
           }

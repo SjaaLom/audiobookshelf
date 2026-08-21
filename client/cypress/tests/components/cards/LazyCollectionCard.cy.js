@@ -63,6 +63,32 @@ describe('LazyCollectionCard', () => {
     cy.get('[data-cy="collection-cover"]').should('have.text', '')
   })
 
+  it('shows the RSS marker for the summary flag or legacy feed details', () => {
+    cy.mount(LazyCollectionCard, {
+      ...mountOptions,
+      propsData: { ...mountOptions.propsData, collectionMount: { ...collection, hasRssFeed: true } }
+    })
+    cy.get('[data-cy="collection-rss-marker"]').should('be.visible')
+
+    cy.mount(LazyCollectionCard, {
+      ...mountOptions,
+      propsData: { ...mountOptions.propsData, collectionMount: { ...collection, hasRssFeed: false } }
+    })
+    cy.get('[data-cy="collection-rss-marker"]').should('not.exist')
+
+    cy.mount(LazyCollectionCard, mountOptions)
+    cy.get('[data-cy="collection-rss-marker"]').should('not.exist')
+
+    cy.mount(LazyCollectionCard, {
+      ...mountOptions,
+      propsData: {
+        ...mountOptions.propsData,
+        collectionMount: { ...collection, rssFeed: { id: 'legacy-feed', slug: 'favorites' } }
+      }
+    })
+    cy.get('[data-cy="collection-rss-marker"]').should('be.visible')
+  })
+
   it('routes to the collection when clicked', () => {
     cy.mount(LazyCollectionCard, {
       ...mountOptions,

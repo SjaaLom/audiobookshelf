@@ -229,7 +229,7 @@ describe('GET /api/v2/libraries/:id/collections', () => {
     const books = [await addBook('a'), await addBook('b'), await addBook('c')]
     const collection = await addCollection('compact', 'Compact', books)
     const summary = (await request()).body.results[0]
-    expect(summary).to.have.all.keys('id', 'libraryId', 'name', 'description', 'numBooks', 'previewItems', 'createdAt', 'updatedAt')
+    expect(summary).to.have.all.keys('id', 'libraryId', 'name', 'description', 'numBooks', 'previewItems', 'hasRssFeed', 'createdAt', 'updatedAt')
     expect(summary).not.to.have.property('books')
     expect(summary.previewItems).to.have.length(2)
     expect(summary.previewItems[0].media).to.have.all.keys('coverPath')
@@ -237,6 +237,29 @@ describe('GET /api/v2/libraries/:id/collections', () => {
     expect(summary.updatedAt).to.be.a('number').and.satisfy(Number.isFinite)
     expect(summary.createdAt).to.equal(collection.createdAt.valueOf())
     expect(summary.updatedAt).to.equal(collection.updatedAt.valueOf())
+  })
+
+  it('returns boolean RSS feed existence without embedding feed details', async () => {
+    const visible = await addBook('visible')
+    const withFeed = await addCollection('with-feed', 'With Feed', [visible])
+    const withoutFeed = await addCollection('without-feed', 'Without Feed', [visible])
+    await Database.feedModel.create({
+      slug: 'collection-feed',
+      entityType: 'collection',
+      entityId: withFeed.id
+    })
+    await Database.feedModel.create({
+      slug: 'non-collection-feed',
+      entityType: 'series',
+      entityId: withoutFeed.id
+    })
+
+    const { body } = await request({ limit: '100' })
+    const summaries = new Map(body.results.map((summary) => [summary.id, summary]))
+
+    expect(summaries.get('with-feed').hasRssFeed).to.equal(true).and.to.be.a('boolean')
+    expect(summaries.get('without-feed').hasRssFeed).to.equal(false).and.to.be.a('boolean')
+    expect(summaries.get('with-feed')).not.to.have.property('rssFeed')
   })
 
   it('loads previews with one batch query regardless of the number of collection rows', async () => {
