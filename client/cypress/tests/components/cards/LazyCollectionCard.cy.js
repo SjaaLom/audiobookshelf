@@ -78,6 +78,30 @@ describe('LazyCollectionCard', () => {
 })
 
 describe('LazyBookshelf collection requests', () => {
+  it('caps large collection pages without changing other bookshelf page sizes', () => {
+    const makeBookshelf = (entityName) => ({
+      entityName,
+      entitiesPerShelf: 8,
+      shelfPadding: 0,
+      totalEntityCardWidth: 10,
+      shelfHeight: 10,
+      sizeMultiplier: 1,
+      totalEntities: 0,
+      booksPerFetch: 0,
+      bookWidth: 10
+    })
+    const bookshelfElement = { clientHeight: 40, clientWidth: 200 }
+    const collectionsBookshelf = makeBookshelf('collections')
+    const itemsBookshelf = makeBookshelf('items')
+
+    LazyBookshelf.methods.initSizeData.call(collectionsBookshelf, bookshelfElement)
+    LazyBookshelf.methods.initSizeData.call(itemsBookshelf, bookshelfElement)
+
+    expect(collectionsBookshelf.entitiesPerShelf * collectionsBookshelf.shelvesPerPage).to.equal(120)
+    expect(collectionsBookshelf.booksPerFetch).to.equal(100)
+    expect(itemsBookshelf.booksPerFetch).to.equal(120)
+  })
+
   it('builds a paginated v2 request with supported collection parameters only', () => {
     const path = LazyBookshelf.methods.buildCollectionsRequestPath.call({
       booksPerFetch: 24,

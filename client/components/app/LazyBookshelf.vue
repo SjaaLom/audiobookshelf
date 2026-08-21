@@ -740,7 +740,8 @@ export default {
       this.entitiesPerShelf = Math.max(1, Math.floor((this.bookshelfWidth - this.shelfPadding) / this.totalEntityCardWidth))
       this.shelvesPerPage = Math.ceil(this.bookshelfHeight / this.shelfHeight) + 2
       this.bookshelfMarginLeft = (this.bookshelfWidth - this.entitiesPerShelf * this.totalEntityCardWidth) / 2
-      const booksPerFetch = this.entitiesPerShelf * this.shelvesPerPage
+      const calculatedBooksPerFetch = this.entitiesPerShelf * this.shelvesPerPage
+      const booksPerFetch = this.entityName === 'collections' ? Math.min(calculatedBooksPerFetch, 100) : calculatedBooksPerFetch
       if (booksPerFetch !== this.booksPerFetch) {
         this.booksPerFetch = booksPerFetch
         if (this.totalEntities) {
