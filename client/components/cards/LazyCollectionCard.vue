@@ -73,7 +73,7 @@ export default {
       return this.collection ? this.collection.name : ''
     },
     books() {
-      return this.collection ? this.collection.books || [] : []
+      return this.collection ? this.collection.previewItems || [] : []
     },
     store() {
       return this.$store || this.$nuxt.$store

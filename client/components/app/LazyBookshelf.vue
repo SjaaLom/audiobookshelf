@@ -336,11 +336,9 @@ export default {
         this.currentSFQueryString = this.buildSearchParams()
       }
 
-      let entityPath = this.entityName === 'series-books' ? 'items' : this.entityName
-      const sfQueryString = this.currentSFQueryString ? this.currentSFQueryString + '&' : ''
-      const fullQueryString = `?${sfQueryString}limit=${this.booksPerFetch}&page=${page}&minified=1&include=rssfeed,numEpisodesIncomplete,share`
+      const requestPath = this.entityName === 'collections' ? this.buildCollectionsRequestPath(page) : this.buildBookshelfRequestPath(page)
 
-      const payload = await this.$axios.$get(`/api/libraries/${this.currentLibraryId}/${entityPath}${fullQueryString}`).catch((error) => {
+      const payload = await this.$axios.$get(requestPath).catch((error) => {
         console.error('failed to fetch items', error)
         return null
       })
@@ -373,6 +371,25 @@ export default {
     loadPage(page) {
       if (!this.pagesLoaded[page]) this.pagesLoaded[page] = this.fetchEntites(page)
       return this.pagesLoaded[page]
+    },
+    buildBookshelfRequestPath(page) {
+      const entityPath = this.entityName === 'series-books' ? 'items' : this.entityName
+      const sfQueryString = this.currentSFQueryString ? this.currentSFQueryString + '&' : ''
+      const fullQueryString = `?${sfQueryString}limit=${this.booksPerFetch}&page=${page}&minified=1&include=rssfeed,numEpisodesIncomplete,share`
+      return `/api/libraries/${this.currentLibraryId}/${entityPath}${fullQueryString}`
+    },
+    buildCollectionsRequestPath(page) {
+      const supportedSorts = ['name', 'createdAt', 'updatedAt']
+      const routeQuery = this.$route?.query || {}
+      const sort = supportedSorts.includes(routeQuery.sort) ? routeQuery.sort : 'name'
+      const params = new URLSearchParams({
+        page,
+        limit: this.booksPerFetch,
+        sort,
+        desc: routeQuery.desc === '1' ? 1 : 0,
+        filter: typeof routeQuery.filter === 'string' ? routeQuery.filter : ''
+      })
+      return `/api/v2/libraries/${this.currentLibraryId}/collections?${params.toString()}`
     },
     showHideBookPlaceholder(index, show) {
       var el = document.getElementById(`book-${index}-placeholder`)
@@ -602,32 +619,17 @@ export default {
         this.libraryItemUpdated(ab)
       })
     },
-    collectionAdded(collection) {
+    collectionAdded() {
       if (this.entityName !== 'collections') return
-      console.log(`[LazyBookshelf] collectionAdded ${collection.id}`, collection)
       this.resetEntities()
     },
-    collectionUpdated(collection) {
+    collectionUpdated() {
       if (this.entityName !== 'collections') return
-      console.log(`[LazyBookshelf] collectionUpdated ${collection.id}`, collection)
-      var indexOf = this.entities.findIndex((ent) => ent && ent.id === collection.id)
-      if (indexOf >= 0) {
-        this.entities[indexOf] = collection
-        if (this.entityComponentRefs[indexOf]) {
-          this.entityComponentRefs[indexOf].setEntity(collection)
-        }
-      }
+      this.resetEntities()
     },
-    collectionRemoved(collection) {
+    collectionRemoved() {
       if (this.entityName !== 'collections') return
-      console.log(`[LazyBookshelf] collectionRemoved ${collection.id}`, collection)
-      var indexOf = this.entities.findIndex((ent) => ent && ent.id === collection.id)
-      if (indexOf >= 0) {
-        this.entities = this.entities.filter((ent) => ent.id !== collection.id)
-        this.totalEntities--
-        this.$eventBus.$emit('bookshelf-total-entities', this.totalEntities)
-        this.executeRebuild()
-      }
+      this.resetEntities()
     },
     playlistAdded(playlist) {
       if (this.entityName !== 'playlists') return
