@@ -45,6 +45,8 @@ paths:
     $ref: './controllers/LibraryController.yaml#/paths/~1api~1libraries~1{id}~1series~1{seriesId}'
   /api/v2/libraries/{id}/collections:
     $ref: './controllers/CollectionV2Controller.yaml#/paths/~1api~1v2~1libraries~1{id}~1collections'
+  /api/v2/libraries/{id}/collections/membership:
+    $ref: './controllers/CollectionV2Controller.yaml#/paths/~1api~1v2~1libraries~1{id}~1collections~1membership'
   /api/notifications:
     $ref: './controllers/NotificationController.yaml#/paths/~1api~1notifications'
   /api/notificationdata:

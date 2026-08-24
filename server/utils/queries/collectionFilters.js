@@ -32,6 +32,92 @@ function getVisibleBookSql(user) {
 
 module.exports = {
   /**
+   * Validate selected library items and return their de-duplicated IDs.
+   *
+   * @param {object} options
+   * @param {string} options.libraryId
+   * @param {import('../../models/User')} options.user
+   * @param {string[]} options.libraryItemIds
+   * @returns {Promise<string[]|null>}
+   */
+  async validateCollectionMembershipSelection({ libraryId, user, libraryItemIds }) {
+    const uniqueIds = [...new Set(libraryItemIds)]
+    const visibleBook = getVisibleBookSql(user)
+    const rows = await Database.sequelize.query(
+      `SELECT li.id
+         FROM libraryItems li
+         JOIN books b ON b.id = li.mediaId
+        WHERE li.id IN (:libraryItemIds)
+          AND li.libraryId = :libraryId
+          AND li.mediaType = 'book'
+          AND ${visibleBook.sql}`,
+      {
+        replacements: {
+          ...visibleBook.replacements,
+          libraryId,
+          libraryItemIds: uniqueIds
+        },
+        type: QueryTypes.SELECT
+      }
+    )
+
+    return rows.length === uniqueIds.length ? uniqueIds : null
+  },
+
+  /**
+   * Get compact collection membership counts for selected library items.
+   *
+   * @returns {Promise<{ results:object[], total:number }>}
+   */
+  async getCollectionMemberships({ libraryId, user, libraryItemIds, page, limit, sort, desc, filter }) {
+    const direction = desc ? 'DESC' : 'ASC'
+    const sortExpression = collectionSortExpressions.get(sort)
+    if (!sortExpression) throw new Error(`[collectionFilters] Unsupported collection summary sort: ${sort}`)
+    const visibleBook = getVisibleBookSql(user)
+    const filterSql = filter ? "AND LOWER(c.name) LIKE LOWER(:filter) ESCAPE '\\'" : ''
+    const replacements = {
+      ...visibleBook.replacements,
+      libraryId,
+      libraryItemIds,
+      limit,
+      offset: page * limit,
+      ...(filter ? { filter: `%${escapeLike(filter)}%` } : {})
+    }
+    const visibleMembershipSql = `
+      FROM collectionBooks cb
+      JOIN books b ON b.id = cb.bookId
+      WHERE cb.collectionId = c.id AND ${visibleBook.sql}`
+    const collectionVisibilitySql = `
+      (NOT EXISTS (SELECT 1 FROM collectionBooks cb WHERE cb.collectionId = c.id)
+       OR EXISTS (SELECT 1 ${visibleMembershipSql}))`
+
+    const results = await Database.sequelize.query(
+      `SELECT c.id, c.name,
+              (SELECT COUNT(DISTINCT li.id)
+                 FROM collectionBooks selectedCb
+                 JOIN libraryItems li ON li.mediaId = selectedCb.bookId
+                  AND li.libraryId = :libraryId AND li.mediaType = 'book'
+                WHERE selectedCb.collectionId = c.id
+                  AND li.id IN (:libraryItemIds)) AS includedCount
+         FROM collections c
+        WHERE c.libraryId = :libraryId ${filterSql}
+          AND ${collectionVisibilitySql}
+        ORDER BY ${sortExpression} ${direction}, c.id ${direction}
+        LIMIT :limit OFFSET :offset`,
+      { replacements, type: QueryTypes.SELECT }
+    )
+    const [{ total }] = await Database.sequelize.query(
+      `SELECT COUNT(*) AS total FROM collections c
+        WHERE c.libraryId = :libraryId ${filterSql}
+          AND ${collectionVisibilitySql}`,
+      { replacements, type: QueryTypes.SELECT }
+    )
+
+    for (const collection of results) collection.includedCount = Number(collection.includedCount)
+    return { results, total: Number(total) }
+  },
+
+  /**
    * Get compact collection summaries for a library.
    *
    * @param {object} options

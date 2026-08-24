@@ -86,6 +86,14 @@ class ApiRouter {
       CollectionV2Controller.validateQuery.bind(this),
       CollectionV2Controller.findAll.bind(this)
     )
+    this.router.post(
+      '/v2/libraries/:id/collections/membership',
+      CollectionV2Controller.captureQuery.bind(this),
+      LibraryController.middleware.bind(this),
+      CollectionV2Controller.validateQuery.bind(this),
+      CollectionV2Controller.validateMembershipBody.bind(this),
+      CollectionV2Controller.findMemberships.bind(this)
+    )
     this.router.get('/libraries/:id/playlists', LibraryController.middleware.bind(this), LibraryController.getUserPlaylistsForLibrary.bind(this))
     this.router.get('/libraries/:id/personalized', LibraryController.middleware.bind(this), LibraryController.getUserPersonalizedShelves.bind(this))
     this.router.get('/libraries/:id/filterdata', LibraryController.middleware.bind(this), LibraryController.getLibraryFilterData.bind(this))

@@ -10,7 +10,7 @@ const ApiCacheManager = require('../../../server/managers/ApiCacheManager')
 const Auth = require('../../../server/Auth')
 const collectionFilters = require('../../../server/utils/queries/collectionFilters')
 
-describe('GET /api/v2/libraries/:id/collections', () => {
+describe('Collection v2 controller', () => {
   let library
   let folder
   let user
@@ -110,6 +110,21 @@ describe('GET /api/v2/libraries/:id/collections', () => {
     const res = response()
     CollectionV2Controller.validateQuery(req, res, () => {})
     if (!res.status.called) await CollectionV2Controller.findAll(req, res)
+    return { req, res, body: res.json.lastCall?.args[0] }
+  }
+
+  async function membershipRequest(libraryItemIds, query = {}) {
+    const req = {
+      body: { libraryItemIds },
+      query,
+      params: { id: library.id },
+      user,
+      library
+    }
+    const res = response()
+    CollectionV2Controller.validateQuery(req, res, () => {})
+    if (!res.status.called) await CollectionV2Controller.validateMembershipBody(req, res, () => {})
+    if (!res.status.called) await CollectionV2Controller.findMemberships(req, res)
     return { req, res, body: res.json.lastCall?.args[0] }
   }
 
@@ -354,5 +369,100 @@ describe('GET /api/v2/libraries/:id/collections', () => {
     expect(routes).to.include('/collections/:id')
     const v2Route = routeLayers.find((layer) => layer.route.path === '/v2/libraries/:id/collections')
     expect(v2Route.route.stack.map((layer) => layer.name)).to.deep.equal(['bound captureQuery', 'bound middleware', 'bound validateQuery', 'bound findAll'])
+  })
+
+  it('returns compact membership counts for no, partial, and complete overlap', async () => {
+    const one = await addBook('one')
+    const two = await addBook('two')
+    const other = await addBook('other')
+    await addCollection('none', 'None', [other])
+    await addCollection('partial', 'Partial', [one, other])
+    await addCollection('complete', 'Complete', [one, two])
+    const querySpy = sinon.spy(Database.sequelize, 'query')
+
+    const { body } = await membershipRequest([one.item.id, two.item.id], { limit: '100' })
+    expect(body).to.include({ selectionCount: 2, total: 3, limit: 100, page: 0, sortBy: 'name', sortDesc: false, filterBy: '' })
+    expect(body.results).to.deep.equal([
+      { id: 'complete', name: 'Complete', includedCount: 2 },
+      { id: 'none', name: 'None', includedCount: 0 },
+      { id: 'partial', name: 'Partial', includedCount: 1 }
+    ])
+    for (const result of body.results) {
+      expect(result).to.have.all.keys('id', 'name', 'includedCount')
+      expect(result).not.to.have.property('books')
+    }
+    expect(querySpy.callCount).to.equal(3)
+  })
+
+  it('de-duplicates selected IDs for selection and membership counts', async () => {
+    const selected = await addBook('selected')
+    await addCollection('collection', 'Collection', [selected])
+
+    const { body } = await membershipRequest([selected.item.id, selected.item.id])
+    expect(body.selectionCount).to.equal(1)
+    expect(body.results[0]).to.deep.equal({ id: 'collection', name: 'Collection', includedCount: 1 })
+  })
+
+  it('rejects malformed, unknown, wrong-library, non-book, and inaccessible selections', async () => {
+    const allowed = await addBook('allowed', { tags: ['allowed'] })
+    const denied = await addBook('denied', { tags: ['denied'] })
+    const explicit = await addBook('explicit', { explicit: true, tags: ['allowed'] })
+    const otherLibrary = await Database.libraryModel.create({ id: 'library-b', name: 'Other', mediaType: 'book' })
+    const otherFolder = await Database.libraryFolderModel.create({ path: '/other-books', libraryId: otherLibrary.id })
+    const otherBook = await Database.bookModel.create({ id: 'book-other', title: 'Other', audioFiles: [], narrators: [], genres: [], chapters: [], tags: [] })
+    const wrongLibrary = await Database.libraryItemModel.create({
+      id: 'item-wrong-library', path: '/other-books/other', libraryFiles: [], mediaId: otherBook.id, mediaType: 'book', libraryId: otherLibrary.id, libraryFolderId: otherFolder.id
+    })
+    const podcast = await Database.podcastModel.create({ id: 'podcast-one', title: 'Podcast', episodes: [], genres: [], tags: [] })
+    const nonBook = await Database.libraryItemModel.create({
+      id: 'item-podcast', path: '/books/podcast', libraryFiles: [], mediaId: podcast.id, mediaType: 'podcast', libraryId: library.id, libraryFolderId: folder.id
+    })
+    user.permissions = { accessAllTags: false, itemTagsSelected: ['allowed'], selectedTagsNotAccessible: false }
+    user.canAccessExplicitContent = false
+
+    for (const ids of [undefined, [], [''], ['   '], [1], ['missing'], [wrongLibrary.id], [nonBook.id], [denied.item.id], [explicit.item.id], [allowed.item.id, 'missing']]) {
+      const { res } = await membershipRequest(ids)
+      expect(res.status.calledWith(400), JSON.stringify(ids)).to.equal(true)
+      expect(res.send.calledWithMatch(/^Invalid request\./)).to.equal(true)
+    }
+  })
+
+  it('preserves collection visibility, stable pagination, and literal case-insensitive filtering', async () => {
+    await Database.sequelize.query('PRAGMA case_sensitive_like = ON')
+    const selected = await addBook('selected', { tags: ['allowed'] })
+    const denied = await addBook('denied', { tags: ['denied'] })
+    await addCollection('c-b', 'alpha 100%', [selected])
+    await addCollection('c-a', 'Alpha 100%', [selected])
+    await addCollection('hidden', 'Hidden 100%', [denied])
+    await addCollection('empty', 'Empty', [])
+    user.permissions = { accessAllTags: false, itemTagsSelected: ['allowed'], selectedTagsNotAccessible: false }
+
+    const first = (await membershipRequest([selected.item.id], { filter: 'ALPHA 100%', limit: '1', page: '0' })).body
+    const second = (await membershipRequest([selected.item.id], { filter: 'ALPHA 100%', limit: '1', page: '1' })).body
+    expect(first.results.map((result) => result.id)).to.deep.equal(['c-a'])
+    expect(second.results.map((result) => result.id)).to.deep.equal(['c-b'])
+    expect(first.total).to.equal(2)
+    const all = (await membershipRequest([selected.item.id], { limit: '100' })).body
+    expect(all.results.map((result) => result.id)).to.include('empty').and.not.include('hidden')
+  })
+
+  it('registers membership middleware after library access and before its validation and handler', async () => {
+    const router = new ApiRouter({ auth: new Auth(), apiCacheManager: new ApiCacheManager() })
+    const route = router.router._router.stack.find((layer) => layer.route?.path === '/v2/libraries/:id/collections/membership')
+    expect(route.route.methods).to.have.property('post', true)
+    expect(route.route.stack.map((layer) => layer.name)).to.deep.equal([
+      'bound captureQuery',
+      'bound middleware',
+      'bound validateQuery',
+      'bound validateMembershipBody',
+      'bound findMemberships'
+    ])
+
+    const deniedReq = { params: { id: 'other-library' }, query: { limit: 'invalid' }, body: {}, user }
+    const deniedRes = response()
+    CollectionV2Controller.captureQuery(deniedReq, deniedRes, () => {})
+    await LibraryController.middleware(deniedReq, deniedRes, () => CollectionV2Controller.validateQuery(deniedReq, deniedRes, () => {}))
+    expect(deniedRes.sendStatus.calledWith(403)).to.equal(true)
+    expect(deniedRes.status.calledWith(400)).to.equal(false)
   })
 })

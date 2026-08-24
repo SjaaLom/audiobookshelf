@@ -1334,6 +1334,227 @@
         }
       }
     },
+    "/api/v2/libraries/{id}/collections/membership": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "description": "The ID of the library.",
+          "schema": {
+            "$ref": "#/components/schemas/libraryId"
+          }
+        }
+      ],
+      "post": {
+        "operationId": "getLibraryCollectionMemberships",
+        "summary": "Get collection membership counts for selected library items",
+        "description": "Returns paginated compact collection rows and the number of distinct selected books in each collection. Submitted IDs are de-duplicated. Every selected ID must identify a book in the requested library that is available under the requesting user's explicit-content and tag permissions; otherwise the entire request is rejected. Persisted empty collections are included, while non-empty collections containing no books visible to the user are excluded. Membership counts never include inaccessible books.",
+        "tags": [
+          "Collections"
+        ],
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "description": "Zero-indexed page number. The product of `page` and `limit` must be a safe integer.",
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991,
+              "default": 0
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Maximum number of collection membership rows to return.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "description": "Field used to sort collections. Name sorting is case-insensitive. The collection ID is used as a stable secondary sort key.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "name",
+                "createdAt",
+                "updatedAt"
+              ],
+              "default": "name"
+            }
+          },
+          {
+            "name": "desc",
+            "in": "query",
+            "description": "Sort in descending order when set to `1`; set to `0` for ascending order.",
+            "schema": {
+              "type": "integer",
+              "enum": [
+                0,
+                1
+              ],
+              "default": 0
+            }
+          },
+          {
+            "name": "filter",
+            "in": "query",
+            "description": "Case-insensitive substring to match against collection names. Percent signs and underscores are treated literally.",
+            "schema": {
+              "type": "string",
+              "default": ""
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "libraryItemIds"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "libraryItemIds": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  }
+                }
+              },
+              "example": {
+                "libraryItemIds": [
+                  "library-item-id-1",
+                  "library-item-id-2"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Collection membership counts retrieved successfully.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "results",
+                    "total",
+                    "selectionCount",
+                    "limit",
+                    "page",
+                    "sortBy",
+                    "sortDesc",
+                    "filterBy"
+                  ],
+                  "properties": {
+                    "results": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "id",
+                          "name",
+                          "includedCount"
+                        ],
+                        "additionalProperties": false,
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "includedCount": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "description": "Number of distinct validated selected library items that belong to this collection, excluding inaccessible membership."
+                          }
+                        }
+                      }
+                    },
+                    "total": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "description": "Total number of matching visible collections before pagination."
+                    },
+                    "selectionCount": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "description": "Number of unique requested library item IDs after server-side de-duplication."
+                    },
+                    "limit": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 100
+                    },
+                    "page": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "sortBy": {
+                      "type": "string",
+                      "enum": [
+                        "name",
+                        "createdAt",
+                        "updatedAt"
+                      ]
+                    },
+                    "sortDesc": {
+                      "type": "boolean"
+                    },
+                    "filterBy": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request body or a pagination, sorting, direction, or filter query parameter is invalid. The entire request is rejected if any selected item is unknown, belongs to another library, is not a book, or is inaccessible to the user.",
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string",
+                  "example": "Invalid request. Every library item must be an accessible book in the requested library"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required."
+          },
+          "403": {
+            "description": "The authenticated user cannot access the requested library."
+          },
+          "404": {
+            "description": "The requested library was not found.",
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string",
+                  "example": "Library not found"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/notifications": {
       "get": {
         "operationId": "getNotifications",

@@ -117,6 +117,44 @@ class CollectionV2Controller {
       filterBy: options.filter
     })
   }
+
+  async validateMembershipBody(req, res, next) {
+    const libraryItemIds = req.body?.libraryItemIds
+    if (!Array.isArray(libraryItemIds) || !libraryItemIds.length || libraryItemIds.some((id) => typeof id !== 'string' || !id.trim())) {
+      return res.status(400).send('Invalid request. Library item IDs must be a non-empty array of non-empty strings')
+    }
+
+    const validatedIds = await collectionFilters.validateCollectionMembershipSelection({
+      libraryId: req.library.id,
+      user: req.user,
+      libraryItemIds
+    })
+    if (!validatedIds) return res.status(400).send('Invalid request. Every library item must be an accessible book in the requested library')
+
+    req.collectionMembershipItemIds = validatedIds
+    next()
+  }
+
+  async findMemberships(req, res) {
+    const options = req.collectionSummaryQuery
+    const libraryItemIds = req.collectionMembershipItemIds
+    const payload = await collectionFilters.getCollectionMemberships({
+      libraryId: req.library.id,
+      user: req.user,
+      libraryItemIds,
+      ...options
+    })
+
+    res.json({
+      ...payload,
+      selectionCount: libraryItemIds.length,
+      limit: options.limit,
+      page: options.page,
+      sortBy: options.sort,
+      sortDesc: options.desc,
+      filterBy: options.filter
+    })
+  }
 }
 
 module.exports = new CollectionV2Controller()
