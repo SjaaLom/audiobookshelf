@@ -625,11 +625,11 @@ export default {
     },
     collectionUpdated() {
       if (this.entityName !== 'collections') return
-      this.resetEntities()
+      this.resetEntities(this.currScrollTop)
     },
     collectionRemoved() {
       if (this.entityName !== 'collections') return
-      this.resetEntities()
+      this.resetEntities(this.currScrollTop)
     },
     playlistAdded(playlist) {
       if (this.entityName !== 'playlists') return
