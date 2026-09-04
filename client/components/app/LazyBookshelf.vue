@@ -339,7 +339,7 @@ export default {
       const requestPath = this.entityName === 'collections' ? this.buildCollectionsRequestPath(page) : this.buildBookshelfRequestPath(page)
 
       const payload = await this.$axios.$get(requestPath).catch((error) => {
-        console.error('failed to fetch items', error)
+        console.error(`[LazyBookshelf] failed to fetch ${this.entityName} items from ${requestPath}`, error)
         return null
       })
 
