@@ -11,7 +11,7 @@
         </div>
       </div>
 
-      <span v-if="!isHovering && rssFeed" class="absolute z-10 material-symbols text-success" :style="{ top: 0.5 + 'em', left: 0.5 + 'em', fontSize: 1.5 + 'em' }">rss_feed</span>
+      <span v-if="!isHovering && hasRssFeed" data-cy="collection-rss-marker" class="absolute z-10 material-symbols text-success" :style="{ top: 0.5 + 'em', left: 0.5 + 'em', fontSize: 1.5 + 'em' }">rss_feed</span>
     </div>
 
     <div v-if="!isAlternativeBookshelfView" class="categoryPlacard absolute z-30 left-0 right-0 mx-auto -bottom-6e h-6e rounded-md text-center" :style="{ width: Math.min(200, cardWidth) + 'px' }">
@@ -73,7 +73,7 @@ export default {
       return this.collection ? this.collection.name : ''
     },
     books() {
-      return this.collection ? this.collection.books || [] : []
+      return this.collection ? this.collection.previewItems || [] : []
     },
     store() {
       return this.$store || this.$nuxt.$store
@@ -88,8 +88,8 @@ export default {
     userCanUpdate() {
       return this.store.getters['user/getUserCanUpdate']
     },
-    rssFeed() {
-      return this.collection ? this.collection.rssFeed : null
+    hasRssFeed() {
+      return this.collection ? this.collection.hasRssFeed === true || Boolean(this.collection.rssFeed) : false
     }
   },
   methods: {

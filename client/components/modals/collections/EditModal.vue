@@ -82,7 +82,7 @@ export default {
       return this.collection.name
     },
     books() {
-      return this.collection.books || []
+      return this.collection.previewItems || this.collection.books || []
     },
     userCanDelete() {
       return this.$store.getters['user/getUserCanDelete']

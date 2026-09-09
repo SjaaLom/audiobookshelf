@@ -67,7 +67,8 @@ module.exports = {
 
     const results = await Database.sequelize.query(
       `SELECT c.id, c.libraryId, c.name, c.description, c.createdAt, c.updatedAt,
-              (SELECT COUNT(*) ${visibleMembershipSql}) AS numBooks
+              (SELECT COUNT(*) ${visibleMembershipSql}) AS numBooks,
+              EXISTS (SELECT 1 FROM feeds f WHERE f.entityType = 'collection' AND f.entityId = c.id) AS hasRssFeed
          FROM collections c
         WHERE c.libraryId = :libraryId ${filterSql}
           AND ${collectionVisibilitySql}
@@ -129,6 +130,7 @@ module.exports = {
 
     for (const collection of results) {
       collection.numBooks = Number(collection.numBooks)
+      collection.hasRssFeed = Boolean(collection.hasRssFeed)
       collection.createdAt = new Date(collection.createdAt).valueOf()
       collection.updatedAt = new Date(collection.updatedAt).valueOf()
       collection.previewItems = previewsByCollection.get(collection.id) || []

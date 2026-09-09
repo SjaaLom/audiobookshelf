@@ -41,7 +41,7 @@ components:
       allOf:
         - $ref: '#/components/schemas/collection'
         - type: object
-          required: [numBooks, previewItems]
+          required: [numBooks, previewItems, hasRssFeed]
           properties:
             numBooks:
               type: integer
@@ -53,3 +53,6 @@ components:
               description: Up to two visible library items, in collection order, for displaying cover previews. This is empty for a persisted collection with no book memberships.
               items:
                 $ref: '#/components/schemas/collectionPreviewItem'
+            hasRssFeed:
+              type: boolean
+              description: Whether an RSS feed exists for the collection. Feed details are not embedded in this summary.
